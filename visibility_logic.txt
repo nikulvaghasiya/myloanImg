@@ -1,0 +1,61 @@
+Code Excerpt: App Drawer & Package Visibility
+
+Description: The following code demonstrates that the application uses package visibility to populate a local database and a RecyclerView based "App Drawer," allowing the user to discover and launch installed applications—a core requirement for any Home Screen replacement (Launcher).
+/**
+ * CORE LAUNCHER FUNCTIONALITY: 
+ * This excerpt shows how QUERY_ALL_PACKAGES is used to build the App Drawer.
+ */
+
+// 1. Fetching the list of all launchable activities across all user profiles
+private void refreshAndSync(AppDatabase db) {
+    LauncherApps launcherApps = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
+    UserManager userManager = (UserManager) getSystemService(Context.USER_SERVICE);
+    
+    List<AppModel> freshList = new ArrayList<>();
+    List<CachedApp> toCache = new ArrayList<>();
+    List<UserHandle> profiles = userManager.getUserProfiles();
+
+    // Iterating through system profiles to discover installed apps
+    for (UserHandle profile : profiles) {
+        long serialNumber = userManager.getSerialNumberForUser(profile);
+        
+        // This method relies on broad package visibility to return 
+        // all launchable apps for the App Drawer grid.
+        List<LauncherActivityInfo> apps = launcherApps.getActivityList(null, profile);
+
+        for (LauncherActivityInfo info : apps) {
+            String pkg = info.getComponentName().getPackageName();
+            
+            // Filter out the launcher itself and add others to the UI list
+            if (!pkg.equals(getPackageName())) {
+                String label = info.getLabel().toString();
+                freshList.add(new AppModel(label, pkg, null, serialNumber));
+                toCache.add(new CachedApp(pkg, label, serialNumber));
+            }
+        }
+    }
+    
+    // Alphabetical sorting for the user-facing Fast Scroller
+    Collections.sort(freshList, (a, b) -> a.label.compareToIgnoreCase(b.label));
+
+    // Update the UI list for the User
+    updateUIList(freshList);
+}
+
+// 2. Mapping discovered packages to the UI Grid (RecyclerView)
+private void initUI() {
+    recyclerView = findViewById(R.id.drawer_recycler);
+    // Standard 4-column grid for app discovery
+    recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
+    
+    adapter = new AppAdapter(this, appsList);
+    recyclerView.setAdapter(adapter);
+    
+    // Search filter to allow users to find specific packages quickly
+    searchBar.addTextChangedListener(new TextWatcher() {
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count) {
+            filterApps(s.toString());
+        }
+    });
+}
